@@ -22,9 +22,11 @@
 namespace eval legacysupport {
 }
 
-# default to OS X El Capitan (OS X 10.11; Darwin 15) due to clock_gettime
+# Newest Darwin version that requires legacy support.
+# Currently OS X 10.12 ( Sierra, Darwin 16) due to utimensat, fsgetpath, setattrlistat
+set ls_max_darwin_support 16
 options legacysupport.newest_darwin_requires_legacy
-default legacysupport.newest_darwin_requires_legacy 15
+default legacysupport.newest_darwin_requires_legacy ${ls_max_darwin_support}
 
 options legacysupport.header_search
 default legacysupport.header_search     {-isystem${prefix}/include/LegacySupport}
@@ -38,6 +40,14 @@ default legacysupport.use_static        no
 options legacysupport.redirect_bins
 default legacysupport.redirect_bins     {}
 
+if {[info exists makefile.override]} {
+    pre-configure {
+        ui_error "The legacysupport PG must be included *before* the makefile PG"
+        ui_error "otherwise the latter fails to pick up the updated compiler flags."
+        return -code error "configuration error"
+    }
+}
+
 proc legacysupport::get_library_name {} {
     global prefix
     if {[option legacysupport.use_static]} {
@@ -47,22 +57,36 @@ proc legacysupport::get_library_name {} {
     }
 }
 
-proc legacysupport::get_library_link_flags {} {
-    global prefix
-    set lib [legacysupport::get_library_name]
-    if {[option legacysupport.use_static]} {
-        return ${lib}
+proc legacysupport::get_cpp_flags {} {
+    global os.platform os.major
+    if {${os.platform} eq "darwin" && ${os.major} <= [option legacysupport.newest_darwin_requires_legacy]} {
+        return [option legacysupport.header_search]
     } else {
-        return -L${prefix}/lib\ ${lib}
+        return ""
+    }
+}
+
+proc legacysupport::get_library_link_flags {} {
+    global prefix os.platform os.major
+    if {${os.platform} eq "darwin" && ${os.major} <= [option legacysupport.newest_darwin_requires_legacy]} {
+        set lib [legacysupport::get_library_name]
+        if {[option legacysupport.use_static]} {
+            return ${lib}
+        } else {
+            return -L${prefix}/lib\ ${lib}
+        }
+    } else {
+        return ""
     }
 }
 
 # Returns the newest Darwin version for which the legacy support
 # library generates missing symbols.
 # https://github.com/macports/macports-legacy-support
-# Current Darwin 15 for clock_gettime
+# Current Darwin 16 for utimensat, fsgetpath, setattrlistat
 proc legacysupport::get_newest_darwin_with_missing_symbols {} {
-    return 15
+    global   ls_max_darwin_support
+    return ${ls_max_darwin_support}
 }
 
 # please remove when a86f95c has been in a released MacPorts version for at least two weeks

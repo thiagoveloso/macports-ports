@@ -5,16 +5,32 @@ PortGroup           select 1.0
 PortGroup           compilers 1.0
 PortGroup           muniversal 1.0
 PortGroup           legacysupport 1.1
+PortGroup           mpiutil 1.0
+
+#===============================================================================
+#
+# *** IMPORTANT NOTE ***
+#
+# When making logic changes to this port, PLEASE review port 'openmpi' to see
+# if the same changes should be applied. While the subports and variants aren't
+# exactly the same between the two - and things like configure arguments
+# certainly differ, as they're different code bases - much of the core logic
+# is very similar. (And often identical.)
+#
+# Please help us avoid divergent MPI ports, which cause serious migraines.
+#
+#===============================================================================
 
 # make sure to keep in sync with mpi-doc
 name                mpich
 version             3.4.1
-revision            1
+revision            3
 
 license             BSD
 categories          science parallel net
 platforms           darwin
 maintainers         {eborisch @eborisch} \
+                    {@mascguy} \
                     openmaintainer
 
 description         Message Passing Interface (MPI) Library
@@ -170,7 +186,6 @@ configure.args      --disable-dependency-tracking    \
                     --with-pm=hydra                  \
                     --with-thread-package=posix      \
                     --with-hwloc-prefix=${prefix}    \
-                    --enable-alloca                  \
                     "F90FLAGS='' F90=''"
 
 variant threads description {Build with full thread support} {
@@ -206,25 +221,16 @@ if {${name} ne ${subport} && [string first "-devel" $subport] < 0} {
     set all_name [split ${subport} -]
     conflicts-append mpich-devel-[join [lrange ${all_name} 1 end] -]
 
-    # As we are making wrappers, we depend on the compilers to exist. The
-    # compilers group already does this for gcc, but not clangXX.  This adds
-    # clang-X.X to the depends_lib (not just depends_build)
-    if {[regexp {clang[5-9]\d} ${cname}] == 1} {
-        set cport_name          [regsub {(\d)(\d)} ${cname} {-\1.\2}]
-        depends_lib-append      port:${cport_name}
-    } elseif {[regexp {clang\d\d} ${cname}] == 1} {
-        set cport_name          [regsub {(\d)(\d)} ${cname} {-\1\2}]
-        depends_lib-append      port:${cport_name}
-    }
+    # As we are making wrappers, we depend on the compilers to exist.
+    # Add them to depends_lib, not just depends_build.
+    mpiutil_add_compiler_depends_lib ${cname}
 
-    if {[lsearch -exact {mp llvm clang} ${cname}] != -1} {
-        # Force local builds with Xcode-provided compilers (avoid issues with
-        # different Xcode versions on buildbot and user machines)
-        archive_sites
-    }
+    # Determine whether buildbot binaries should be used, and disable if necessary
+    mpiutil_set_binary_eligibility ${subport} ${cname}
 
     depends_build-append        port:pkgconfig
-    depends_lib-append          port:libxml2
+    depends_lib-append          port:libxml2 \
+                                port:hwloc
     depends_run-append          port:mpi_select
     select.group                mpi
     select.file                 ${filespath}/${name}-${cname}

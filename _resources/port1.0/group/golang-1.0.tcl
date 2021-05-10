@@ -51,7 +51,10 @@
 # etc. file in the upstream source code. The go2port tool (install via MacPorts)
 # can be used to generate a skeleton portfile with precomputed go.vendors.
 
-PortGroup  legacysupport 1.1
+PortGroup legacysupport 1.1
+PortGroup compiler_wrapper 1.0
+
+compwrap.print_compiler_command yes
 
 options go.package go.domain go.author go.project go.version go.tag_prefix go.tag_suffix
 
@@ -79,6 +82,10 @@ proc go.setup {go_package go_version {go_tag_prefix ""} {go_tag_suffix ""}} {
         bitbucket.org {
             uplevel "PortGroup bitbucket 1.0"
             bitbucket.setup ${go.author} ${go.project} ${go_version} ${go_tag_prefix}
+        }
+        git.sr.ht {
+            uplevel "PortGroup sourcehut 1.0"
+            sourcehut.setup ${go.author} ${go.project} ${go_version} ${go_tag_prefix} ${go_tag_suffix}
         }
         default {
             if {!([info exists PortInfo(name)] && (${PortInfo(name)} ne ${go.project}))} {
@@ -113,6 +120,10 @@ proc go._translate_package_id {package_id} {
                 # Long format: gopkg.in/foo/bar.v1 -> github.com/foo/bar
                 set project [go._strip_gopkg_version ${project}]
             }
+        }
+        git.sr.ht {
+            # Strip leading ~ from author name
+            set author [string trim ${author} ~]
         }
     }
     return [list ${domain} ${author} ${project}]
@@ -149,7 +160,8 @@ set gopath              ${workpath}/gopath
 default worksrcdir      {gopath/src/${go.package}}
 
 set go_env {GOPATH=${gopath} GOARCH=${goarch} GOOS=${goos} GOPROXY=off GO111MODULE=off \
-                CC=${configure.cc} CXX=${configure.cxx} FC=${configure.fc} OBJC=${configure.objc} OBJCXX=${configure.objcxx} }
+                CC=${configure.cc} CXX=${configure.cxx} FC=${configure.fc} \
+                OBJC=${configure.objc} OBJCXX=${configure.objcxx} }
 
 default build.cmd     {${go.bin} build}
 default build.args      ""
@@ -169,40 +181,32 @@ proc go.append_env {} {
     # Create a wrapper scripts around compiler commands to enforce use of MacPorts flags
     # and to aid use of MacPorts legacysupport library as required.
     if { ${os.major} <= [option legacysupport.newest_darwin_requires_legacy] } {
-        post-extract {
-            # Note, go annoyingly uses CC for both building and linking, and thus in order to get it to correctly
-            # link to the legacy support library, the ldflags need to be added to the cc and ccx wrappers.
-            # To then prevent 'clang linker input unused' errors we must append -Wno-error at the end.
-            # Also remove '-static' from compilation options as this is not supported on older systems.
-            set flags "${configure.cppflags} ${configure.ldflags} \$\{\@\//-static/\} -Wno-error"
-            system "echo '#!/bin/bash'                                                                       >  ${workpath}/go_cc_wrap"
-            system "echo 'CMD=\"${configure.cc} ${configure.cflags} [get_canonical_archflags cc] ${flags}\"' >> ${workpath}/go_cc_wrap"
-            system "echo 'echo \${CMD} ; exec \${CMD}'                                                       >> ${workpath}/go_cc_wrap"
-            system "chmod +x ${workpath}/go_cc_wrap"
-            system "echo '#!/bin/bash'                                                                           >  ${workpath}/go_cxx_wrap"
-            system "echo 'CMD=\"${configure.cxx} ${configure.cxxflags} [get_canonical_archflags cxx] ${flags}\"' >> ${workpath}/go_cxx_wrap"
-            system "echo 'echo \${CMD} ; exec \${CMD}'                                                           >> ${workpath}/go_cxx_wrap"
-            system "chmod +x ${workpath}/go_cxx_wrap"
-            system "echo '#!/bin/bash'                                                                              >  ${workpath}/go_objc_wrap"
-            system "echo 'CMD=\"${configure.objc} ${configure.objcflags} [get_canonical_archflags objc] ${flags}\"' >> ${workpath}/go_objc_wrap"
-            system "echo 'echo \${CMD} ; exec \${CMD}'                                                              >> ${workpath}/go_objc_wrap"
-            system "chmod +x ${workpath}/go_cc_wrap"
-            system "echo '#!/bin/bash'                                                                                    >  ${workpath}/go_objcxx_wrap"
-            system "echo 'CMD=\"${configure.objcxx} ${configure.objcxxflags} [get_canonical_archflags objcxx] ${flags}\"' >> ${workpath}/go_objcxx_wrap"
-            system "echo 'echo \${CMD} ; exec \${CMD}'                                                                    >> ${workpath}/go_objcxx_wrap"
-            system "chmod +x ${workpath}/go_cxx_wrap"
-        }
+        # Note, go annoyingly uses CC for both building and linking, and thus in order to get it to correctly
+        # link to the legacy support library, the ldflags need to be added to the cc and ccx wrappers.
+        # To then prevent 'clang linker input unused' errors we must append -Wno-error at the end.
+        # Also remove '-static' from compilation options as this is not supported on older systems.
+        compwrap.compiler_args_forward \$\{\@\//-static/\}
+        compwrap.compiler_pre_flags    ${configure.ldflags}
+        compwrap.compiler_post_flags   -Wno-error
+    }
+    post-extract {
         build.env-append \
-            "CC=${workpath}/go_cc_wrap" \
-            "CXX=${workpath}/go_cxx_wrap" \
-            "OBJC=${workpath}/go_objc_wrap" \
-            "OBJCXX=${workpath}/go_objcxx_wrap" \
-            "GO_EXTLINK_ENABLED=1" \
-            "BOOT_GO_LDFLAGS=-extldflags='${configure.ldflags}'" \
-            "CGO_CFLAGS=${configure.cflags} [get_canonical_archflags cc]" \
-            "CGO_CXXFLAGS=${configure.cxxflags} [get_canonical_archflags cxx]" \
-            "CGO_LDFLAGS=${configure.cflags} ${configure.ldflags} [get_canonical_archflags ld]" \
-            "GO_LDFLAGS=-extldflags='${configure.ldflags} [get_canonical_archflags ld]'"
+            "CC=[compwrap::wrap_compiler cc]" \
+            "CXX=[compwrap::wrap_compiler cxx]" \
+            "OBJC=[compwrap::wrap_compiler objc]" \
+            "OBJCXX=[compwrap::wrap_compiler objcxx]" \
+            "FC=[compwrap::wrap_compiler fc]" \
+            "F90=[compwrap::wrap_compiler f90]" \
+            "F77=[compwrap::wrap_compiler f77]" 
+        if { ${os.major} <= [option legacysupport.newest_darwin_requires_legacy] } {
+            build.env-append \
+                "GO_EXTLINK_ENABLED=1" \
+                "BOOT_GO_LDFLAGS=-extldflags='${configure.ldflags}'" \
+                "CGO_CFLAGS=${configure.cflags} [get_canonical_archflags cc]" \
+                "CGO_CXXFLAGS=${configure.cxxflags} [get_canonical_archflags cxx]" \
+                "CGO_LDFLAGS=${configure.cflags} ${configure.ldflags} [get_canonical_archflags ld]" \
+                "GO_LDFLAGS=-extldflags='${configure.ldflags} [get_canonical_archflags ld]'"
+        }
         configure.env-append ${build.env}
         test.env-append      ${build.env}
     }

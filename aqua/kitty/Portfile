@@ -3,10 +3,11 @@
 PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           python 1.0
+PortGroup           gpg_verify 1.0
 
-github.setup        kovidgoyal kitty 0.20.1 v
+github.setup        kovidgoyal kitty 0.20.3 v
 github.tarball_from releases
-revision            2
+revision            1
 
 categories          aqua
 platforms           macosx
@@ -26,14 +27,35 @@ if {${os.major} <= 15} {
     }
 }
 
-checksums           rmd160  f14a923892e26886f8079b3aaa39bcb362b21699 \
-                    sha256  43596a1c5645fe476e96e748bb3b44afd680d84b4af409cd36b33de19b31933d \
-                    size    3449932
-
 use_xz              yes
 
-# Changes is already in master, remove the patch in next version
-patchfiles-append   patch-turn-off-werror.diff
+checksums           ${distfiles} \
+                    rmd160  a7cbd429a0cb1aaa2e3029338791c341d68f76b5 \
+                    sha256  b6117d436ce5997a3449fa9ca0d3ce5a577e309e2b196ed006dc33564739cc87 \
+                    size    3487500
+
+gpg_verify.use_gpg_verification \
+                    yes
+
+if {[option gpg_verify.use_gpg_verification]} {
+    extract.only    ${distfiles}
+
+    distfiles-append \
+                    ${name}-${version}${extract.suffix}.sig
+
+    checksums-append \
+                    ${name}-${version}${extract.suffix}.sig \
+                    size 566
+
+    post-checksum {
+        set gpg_keyid 06BC317B515ACE7C
+
+        gpg_verify.verify_gpg_signature \
+            ${filespath}/keyid-${name}.txt \
+            ${distpath}/${name}-${version}${extract.suffix}.sig \
+            ${distpath}/${name}-${version}${extract.suffix}
+    }
+}
 
 patchfiles-append   patch-kitty-no-deprecated-declarations.diff
 
@@ -43,6 +65,7 @@ python.default_version \
 depends_build-append \
                     port:lcms2 \
                     port:librsvg \
+                    port:ncurses \
                     port:optipng \
                     port:pkgconfig
 
@@ -61,6 +84,13 @@ pre-build {
 
 destroot {
     copy ${worksrcpath}/kitty.app ${destroot}${applications_dir}
+
+    # Add terminfo to $prefix for is handled correctly when executing
+    # commands with sudo.
+    set terminfo_path ${prefix}/share/terminfo/78
+    xinstall -d ${destroot}${terminfo_path}
+    xinstall -m 0644 ${worksrcpath}/terminfo/x/xterm-kitty \
+        ${destroot}${terminfo_path}
 
     # add shell completion files
     set bash_complete ${prefix}/share/bash-completion/completions

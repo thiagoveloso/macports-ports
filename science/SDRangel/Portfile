@@ -16,10 +16,10 @@ description           SDRangel is an Open Source Qt5 / OpenGL 3.0+ SDR \
     and signal analyzer frontend to various hardware.
 long_description    ${description}
 
-github.setup          f4exb sdrangel 6.10.1 v
-checksums             rmd160  acd967dade21d5d6badfcba9f77afb3b34e2acdb \
-                      sha256  6bb38bb384f027a6d100c230c9f59755dcb13da405aea21763fd5f841984b203 \
-                      size    47338664
+github.setup          f4exb sdrangel 6.10.3 v
+checksums             rmd160  83e3f73d53f3da6dce26e00eace3d6b74f7c1219 \
+                      sha256  1d60ce5e6a284da8e540a6f46bad3fe93d5c07c53a38716a44e10f4e5bfa2aab \
+                      size    47549272
 revision              0
 
 # check just the version 6 branch for now
@@ -40,6 +40,8 @@ patchfiles-append     disable-remotetx.patch
 # revert https://github.com/f4exb/sdrangel/issues/492
 patchfiles-append     revert_cm256cc.patch
 
+set opencv_ver        3
+
 depends_lib-append \
     port:boost \
     port:codec2 \
@@ -50,7 +52,7 @@ depends_lib-append \
     path:lib/libusb.dylib:libusb \
     port:libiconv \
     port:libopus \
-    port:opencv \
+    port:opencv${opencv_ver} \
     port:serialDV
 
 qt5.depends_component \
@@ -82,6 +84,9 @@ configure.args-append \
     -DIconv_LIBRARY=${prefix}/lib/libiconv.dylib \
     -DIconv_INCLUDE_DIR=${prefix}/include \
     -DRX_SAMPLE_24BIT=ON
+
+cmake.module_path-append \
+    ${prefix}/libexec/opencv${opencv_ver}/cmake
 
 variant debug description {Enable debug messages} {
     configure.args-append   \

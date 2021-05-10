@@ -3,7 +3,7 @@
 PortSystem          1.0
 PortGroup           golang 1.0
 
-go.setup            github.com/mikefarah/yq 4.7.0 v
+go.setup            github.com/mikefarah/yq 4.8.0 v
 revision            0
 
 homepage            https://mikefarah.gitbook.io/yq
@@ -22,14 +22,16 @@ maintainers         {gmail.com:herby.gillot @herbygillot} \
 
 installs_libs       no
 
+github.tarball_from archive
+
 destroot {
     xinstall -m 0755 ${worksrcpath}/${name} ${destroot}${prefix}/bin/
 }
 
 checksums           ${distname}${extract.suffix} \
-                        rmd160  6cf4f214b5f2ec13afbd46472d8fffc63306a851 \
-                        sha256  cd61318a760afa7eb0162e3559f9ddad87d15b9e9087db28a63cd0a7c3d74912 \
-                        size    97067
+                        rmd160  6bb097d212550662e3c4405de7101a6da4c888cb \
+                        sha256  bc95ceacb4857890363d83c234ed6ca225cec385500f09783de6f91a2ca08ea4 \
+                        size    101908
 
 go.vendors          gopkg.in/yaml.v3 \
                         lock    496545a6307b \

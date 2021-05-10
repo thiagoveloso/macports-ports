@@ -5,7 +5,7 @@ PortGroup           python 1.0
 
 name                py-gmic
 version             2.9.4-alpha1
-revision            2
+revision            3
 
 # gmic and py-gmic should be the same version
 set gmic_version    2.9.4
@@ -61,6 +61,9 @@ if {${name} ne ${subport}} {
                     port:xorg-libsm \
                     port:zlib
 
+    build.env-append \
+                    PKG_CONFIG_PATH=${prefix}/lib/opencv4/pkgconfig
+
     patch.dir       ${build.dir}
     patchfiles      patch-setup.py.diff
 
@@ -71,7 +74,7 @@ if {${name} ne ${subport}} {
         move        ${workpath}/gmic-${gmic_version}/src ${build.dir}/src/gmic
     }
 
-    livecheck       none
+    livecheck.type  none
 }
 
 livecheck.url       https://github.com/myselfhimself/gmic-py/tags
